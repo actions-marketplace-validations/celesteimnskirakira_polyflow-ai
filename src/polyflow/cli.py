@@ -337,68 +337,162 @@ def schema():
 
 
 @main.command()
-@click.argument("description")
-@click.option("--output", "-o", default="workflow.yaml", help="Output file path")
-def new(description: str, output: str):
+@click.argument("description", default="", required=False)
+@click.option("--output", "-o", default=None, help="Save path (skips interactive menu)")
+def new(description: str, output: str | None):
     """
-    Generate a workflow YAML from a natural language description.
+    Generate a workflow from a natural language description (interactive).
+
+    \b
+    With no arguments, enters guided conversation mode.
+    Pass a description to generate immediately.
 
     \b
     Examples:
-      polyflow new "Claude writes a plan, Gemini reviews it, I approve" -o plan-review.yaml
-      polyflow new "Security audit of Python code with OWASP checklist" -o sec-audit.yaml
+      polyflow new
+      polyflow new "Claude drafts, Gemini reviews security, I approve"
+      polyflow new "OWASP security audit" -o sec-audit.yaml
     """
-    import yaml
+    config = load_config()
+    if not config.uses_openrouter and not config.api_keys:
+        err_console.print(
+            "[yellow]⚠ No API keys found.[/yellow] "
+            "Set [bold]OPENROUTER_API_KEY[/bold] or run [bold]polyflow init[/bold]."
+        )
+        sys.exit(1)
+
+    _interactive_new(description or "", output, config)
+
+
+def _generate_yaml(description: str, history: list[dict], config) -> str:
+    """Call the LLM to generate workflow YAML. history is the conversation so far."""
+    messages = [{"role": "user", "content": f"Generate a Polyflow workflow for:\n{description}"}]
+    messages.extend(history)
+
+    if config.uses_openrouter:
+        from openai import OpenAI
+        from polyflow.models.openrouter import OPENROUTER_BASE_URL
+        client = OpenAI(api_key=config.openrouter_api_key, base_url=OPENROUTER_BASE_URL)
+        raw = client.chat.completions.create(
+            model="anthropic/claude-sonnet-4-5",
+            max_tokens=2048,
+            messages=[{"role": "system", "content": _NEW_SYSTEM_PROMPT}] + messages,
+        ).choices[0].message.content
+    else:
+        import anthropic
+        client = anthropic.Anthropic(api_key=config.get_api_key("claude"))
+        raw = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=2048,
+            system=_NEW_SYSTEM_PROMPT,
+            messages=messages,
+        ).content[0].text
+
+    raw = raw.strip()
+    if raw.startswith("```"):
+        lines = raw.splitlines()
+        raw = "\n".join(ln for ln in lines if not ln.startswith("```")).strip()
+    return raw
+
+
+def _show_yaml(yaml_content: str, wf_name: str, step_ids: list[str]) -> None:
+    from rich.syntax import Syntax
+    console.print()
+    console.print(Syntax(yaml_content, "yaml", theme="monokai", line_numbers=False, padding=(0, 1)))
+    console.print(
+        f"\n  [bold green]{wf_name}[/bold green]  "
+        f"[dim]{len(step_ids)} steps: {', '.join(step_ids)}[/dim]"
+    )
+
+
+def _interactive_new(initial_description: str, save_path: str | None, config) -> None:
+    import yaml as _yaml
     from pydantic import ValidationError
     from polyflow.schema.workflow import Workflow
 
-    config = load_config()
+    console.print("\n  [bold]Polyflow — workflow generator[/bold]")
+    console.print("  [dim]Describe what you want. Natural language is fine.[/dim]\n")
 
-    console.print(f"\n  [dim]Generating workflow: {description[:60]}...[/dim]")
+    # Get description if not provided
+    if initial_description:
+        description = initial_description
+        console.print(f"  [dim]> {description}[/dim]\n")
+    else:
+        description = click.prompt("  What should this workflow do").strip()
+        if not description:
+            return
 
-    with console.status("[cyan]Generating workflow YAML...[/cyan]"):
-        if config.uses_openrouter:
-            from openai import OpenAI
-            from polyflow.models.openrouter import OPENROUTER_BASE_URL
-            client_or = OpenAI(api_key=config.openrouter_api_key, base_url=OPENROUTER_BASE_URL)
-            yaml_content = client_or.chat.completions.create(
-                model="anthropic/claude-sonnet-4-5",
-                max_tokens=2048,
-                messages=[
-                    {"role": "system", "content": _NEW_SYSTEM_PROMPT},
-                    {"role": "user", "content": f"Generate a Polyflow workflow for:\n{description}"},
-                ],
-            ).choices[0].message.content
+    history: list[dict] = []   # conversation for multi-turn refinement
+    yaml_content: str = ""
+    wf: Workflow | None = None
+
+    while True:
+        # ── Generate ──────────────────────────────────────────────────────────
+        with console.status("[cyan]Generating...[/cyan]"):
+            yaml_content = _generate_yaml(description, history, config)
+
+        try:
+            raw = _yaml.safe_load(yaml_content)
+            wf = Workflow.model_validate(raw)
+            step_ids = [s.id for s in wf.steps]
+            _show_yaml(yaml_content, wf.name, step_ids)
+            valid = True
+        except (ValidationError, Exception) as e:
+            console.print(f"\n  [yellow]⚠ Generated YAML has issues:[/yellow] {e}")
+            console.print(Syntax(yaml_content, "yaml", theme="monokai", padding=(0, 1)) if yaml_content else "")
+            valid = False
+
+        # ── Menu ──────────────────────────────────────────────────────────────
+        console.print()
+        if valid:
+            console.print("  [bold]What next?[/bold]")
+            console.print("  [bold cyan][r][/bold cyan] Run it now")
+            console.print("  [bold cyan][s][/bold cyan] Save to file")
+            console.print("  [bold cyan][e][/bold cyan] Refine (describe changes)")
+            console.print("  [bold cyan][q][/bold cyan] Quit")
         else:
-            import anthropic
-            api_key = config.get_api_key("claude")
-            client_ant = anthropic.Anthropic(api_key=api_key)
-            yaml_content = client_ant.messages.create(
-                model="claude-sonnet-4-6",
-                max_tokens=2048,
-                system=_NEW_SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": f"Generate a Polyflow workflow for:\n{description}"}],
-            ).content[0].text
+            console.print("  [bold cyan][e][/bold cyan] Try again / describe changes")
+            console.print("  [bold cyan][w][/bold cyan] Save raw output anyway")
+            console.print("  [bold cyan][q][/bold cyan] Quit")
 
-    # Strip accidental markdown fences
-    yaml_content = yaml_content.strip()
-    if yaml_content.startswith("```"):
-        lines = yaml_content.splitlines()
-        yaml_content = "\n".join(l for l in lines if not l.startswith("```")).strip()
+        choice = click.prompt("\n  Choice", default="r" if valid else "e").strip().lower()
 
-    # Validate before saving
-    try:
-        raw = yaml.safe_load(yaml_content)
-        wf = Workflow.model_validate(raw)
-        Path(output).write_text(yaml_content)
-        console.print(f"\n  [green]✓[/green] Workflow [bold]{wf.name}[/bold] saved to [bold]{output}[/bold]")
-        console.print(f"    {len(wf.steps)} steps: {', '.join(s.id for s in wf.steps)}\n")
-        console.print(f"  Run: [bold]polyflow run {output} -i \"your input\"[/bold]")
-        console.print(f"  Edit: [bold]polyflow validate {output}[/bold]\n")
-    except (ValidationError, Exception) as e:
-        console.print(f"\n  [red]✗ Generated YAML failed validation:[/red] {e}")
-        Path(output).write_text(yaml_content)
-        console.print(f"  [yellow]Raw output saved to {output} — edit and re-validate.[/yellow]\n")
+        # ── Run ───────────────────────────────────────────────────────────────
+        if choice == "r" and valid and wf:
+            user_input = click.prompt("  Workflow input").strip()
+            out_path = Path(save_path or f"{wf.name}.yaml")
+            out_path.write_text(yaml_content, encoding="utf-8")
+            console.print(f"\n  [dim]Saved to {out_path}[/dim]\n")
+            from polyflow.engine.runner import run_workflow
+            asyncio.run(run_workflow(out_path, user_input, config, show_output=True))
+            return
+
+        # ── Save ──────────────────────────────────────────────────────────────
+        elif choice in ("s", "w"):
+            default_name = (wf.name if wf else "workflow") + ".yaml"
+            out_path = Path(save_path or click.prompt("  Save as", default=default_name))
+            out_path.write_text(yaml_content, encoding="utf-8")
+            console.print(f"\n  [green]✓[/green] Saved to [bold]{out_path}[/bold]")
+            if valid and wf:
+                console.print(f"  Run:      [bold]polyflow run {out_path} -i \"your input\"[/bold]")
+                console.print(f"  Validate: [bold]polyflow validate {out_path}[/bold]")
+            console.print()
+            return
+
+        # ── Refine ────────────────────────────────────────────────────────────
+        elif choice == "e":
+            refinement = click.prompt("  Describe what to change").strip()
+            # Keep conversation history so the LLM knows what was already generated
+            history = [
+                {"role": "assistant", "content": yaml_content},
+                {"role": "user", "content": refinement},
+            ]
+            description = description  # keep original intent
+
+        # ── Quit ──────────────────────────────────────────────────────────────
+        elif choice == "q":
+            console.print()
+            return
 
 
 @main.command()
