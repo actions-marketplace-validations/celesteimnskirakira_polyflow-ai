@@ -1,0 +1,77 @@
+name: code-review-multi-model
+description: "Multi-model code review: Claude reviews logic, Gemini reviews security, GPT-4 reviews performance, then Claude synthesizes"
+version: "1.0"
+tags: [code-review, security, performance, multi-model]
+
+steps:
+  - id: context_analysis
+    name: Analyze Code Context
+    model: claude
+    prompt: |
+      Analyze the following code change and provide structured context:
+      {{input}}
+
+      Output:
+      - Language and framework detected
+      - Purpose of the change (1-2 sentences)
+      - Key areas of concern to review
+      - Complexity score (1-10)
+
+  - id: parallel_review
+    name: Parallel Multi-Model Review
+    type: parallel
+    steps:
+      - id: logic_review
+        model: claude
+        prompt: |
+          Review this code for logic correctness, edge cases, and maintainability:
+          {{steps.context_analysis.output}}
+
+          Original code:
+          {{input}}
+
+          Focus on: correctness, error handling, edge cases, naming clarity.
+      - id: security_review
+        model: gemini
+        prompt: |
+          Review this code specifically for security vulnerabilities:
+          {{steps.context_analysis.output}}
+
+          Original code:
+          {{input}}
+
+          Check for: injection risks, auth issues, sensitive data exposure, insecure dependencies.
+      - id: performance_review
+        model: gpt-4
+        prompt: |
+          Review this code for performance and scalability issues:
+          {{steps.context_analysis.output}}
+
+          Original code:
+          {{input}}
+
+          Focus on: algorithmic complexity, N+1 queries, memory usage, caching opportunities.
+    aggregate:
+      mode: diff
+      model: claude
+    hitl:
+      message: "Multi-model review complete. Approve, request changes, or abort?"
+      options: [continue, revise, abort]
+      show: diff
+
+  - id: synthesis
+    name: Synthesize Final Review
+    model: claude
+    prompt: |
+      Synthesize these multi-model code reviews into a final, actionable review report:
+
+      {{steps.parallel_review.output}}
+
+      Reviewer notes: {{hitl.parallel_review.note}}
+
+      Output a structured report with:
+      1. Overall verdict (APPROVE / REQUEST_CHANGES / REJECT)
+      2. Critical issues (must fix)
+      3. Suggestions (nice to have)
+      4. Praise (what was done well)
+    condition: "{{hitl.parallel_review.choice}} != 'abort'"

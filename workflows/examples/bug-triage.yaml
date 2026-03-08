@@ -1,0 +1,75 @@
+name: bug-triage
+description: "AI-powered bug triage: classify severity, identify root cause area, suggest fix, assign priority"
+version: "1.0"
+tags: [bug, triage, debugging, prioritization]
+
+steps:
+  - id: classify
+    name: Classify Bug Report
+    model: claude
+    prompt: |
+      Analyze this bug report and classify it:
+      {{input}}
+
+      Output structured JSON:
+      {
+        "severity": "critical|high|medium|low",
+        "category": "crash|performance|ui|data|security|other",
+        "reproducible": "yes|no|sometimes",
+        "affected_component": "<component name>",
+        "summary": "<one sentence>"
+      }
+
+  - id: parallel_analysis
+    name: Multi-Model Root Cause Analysis
+    type: parallel
+    steps:
+      - id: root_cause
+        model: claude
+        prompt: |
+          Based on this bug report, identify the most likely root cause:
+          Bug report: {{input}}
+          Classification: {{steps.classify.output}}
+
+          Provide: root cause hypothesis, code areas to investigate, similar past patterns.
+      - id: impact_analysis
+        model: gemini
+        prompt: |
+          Analyze the user and business impact of this bug:
+          Bug report: {{input}}
+          Classification: {{steps.classify.output}}
+
+          Provide: affected user segments, business impact, SLA implications, urgency score (1-10).
+    aggregate:
+      mode: summary
+      model: claude
+
+  - id: fix_plan
+    name: Generate Fix Plan
+    model: gpt-4
+    prompt: |
+      Based on this triage, generate a concrete fix plan:
+      Bug: {{input}}
+      Analysis: {{steps.parallel_analysis.output}}
+
+      Output:
+      1. Recommended fix approach (with code sketch if applicable)
+      2. Testing strategy to verify the fix
+      3. Rollback plan if fix fails
+      4. Estimated effort (hours)
+    hitl:
+      message: "Triage complete. Confirm fix plan and assign?"
+      options: [continue, revise, abort]
+      show: summary
+
+  - id: ticket
+    name: Generate Ticket Description
+    model: claude
+    prompt: |
+      Generate a complete bug ticket based on this analysis:
+      Original report: {{input}}
+      Fix plan: {{steps.fix_plan.output}}
+      Reviewer notes: {{hitl.fix_plan.note}}
+
+      Format as: Title, Severity, Summary, Steps to Reproduce, Expected/Actual, Fix Plan, Acceptance Criteria.
+    condition: "{{hitl.fix_plan.choice}} != 'abort'"

@@ -1,0 +1,86 @@
+name: dependency-audit
+description: "Audit project dependencies: CVE scan, outdated packages, license review, upgrade plan"
+version: "1.0"
+tags: [security, dependencies, supply-chain, compliance]
+
+steps:
+  - id: inventory
+    name: Build Dependency Inventory
+    model: claude
+    prompt: |
+      Analyze this dependency file and build an inventory:
+      {{input}}
+
+      Output structured inventory:
+      - Total dependencies (direct vs transitive)
+      - Package manager (npm/pip/cargo/etc.)
+      - Dependency categories: runtime/dev/peer
+      - Flag obviously outdated packages (major version behind)
+      - Flag any packages with known security history
+      - Overall health score (1-10)
+
+  - id: parallel_audit
+    name: Multi-Dimension Dependency Audit
+    type: parallel
+    steps:
+      - id: security_audit
+        model: claude
+        prompt: |
+          Audit these dependencies for known security issues:
+          Inventory: {{steps.inventory.output}}
+          Full deps: {{input}}
+
+          For each critical dependency:
+          - Known CVEs (reference CVE IDs if known)
+          - Severity: critical/high/medium/low
+          - Affected versions
+          - Fixed version available?
+          - Recommended action: update/replace/accept-risk
+      - id: maintenance_audit
+        model: gemini
+        prompt: |
+          Audit dependency maintenance health:
+          Inventory: {{steps.inventory.output}}
+
+          For each dependency assess:
+          - Is it actively maintained? (last release, commit activity)
+          - Abandoned or deprecated packages
+          - Packages with concerning ownership changes
+          - Bus factor concerns (single maintainer)
+          - Better maintained alternatives
+      - id: license_audit
+        model: gpt-4
+        prompt: |
+          Audit dependency licenses for compliance:
+          Inventory: {{steps.inventory.output}}
+          Full deps: {{input}}
+
+          For each dependency:
+          - License type (MIT/Apache/GPL/etc.)
+          - Compatibility with project license
+          - Copyleft obligations
+          - Commercial use restrictions
+          - Action required: none/review/replace
+    aggregate:
+      mode: diff
+    hitl:
+      message: "Dependency audit complete. Review findings and approve upgrade plan?"
+      options: [continue, revise, abort]
+      show: diff
+
+  - id: upgrade_plan
+    name: Generate Upgrade Plan
+    model: claude
+    prompt: |
+      Create a prioritized dependency upgrade plan:
+      Audit findings: {{steps.parallel_audit.output}}
+      Notes: {{hitl.parallel_audit.note}}
+
+      Output:
+      ## Immediate (this week): critical security fixes
+      ## This sprint: high severity + breaking changes preparation
+      ## Next sprint: medium severity + maintenance updates
+      ## Backlog: low severity + license cleanup
+
+      For each item: package, current version, target version, breaking change risk, testing required.
+    condition: "{{hitl.parallel_audit.choice}} != 'abort'"

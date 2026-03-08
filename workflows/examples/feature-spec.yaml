@@ -1,0 +1,87 @@
+name: feature-spec
+description: "Turn a user story into a complete feature spec: requirements, edge cases, acceptance criteria, tech design"
+version: "1.0"
+tags: [product, feature, specification, agile, user-story]
+
+steps:
+  - id: clarify_story
+    name: Clarify User Story
+    model: claude
+    prompt: |
+      Analyze and clarify this user story:
+      {{input}}
+
+      Output:
+      - Who is the user? (persona)
+      - What do they want to do?
+      - Why do they want to do it? (business value)
+      - Current workaround (if any)
+      - Success metric (how we know the feature works)
+      - Ambiguities that need clarification (list 3-5 questions)
+    hitl:
+      message: "Story clarified. Review ambiguities and provide answers, then continue?"
+      options: [continue, revise]
+      show: raw
+
+  - id: parallel_spec
+    name: Generate Spec Sections
+    type: parallel
+    steps:
+      - id: requirements
+        model: claude
+        prompt: |
+          Write detailed functional requirements for this feature:
+          User story: {{input}}
+          Clarification: {{steps.clarify_story.output}}
+          Notes: {{hitl.clarify_story.note}}
+
+          Format as numbered acceptance criteria:
+          GIVEN [context] WHEN [action] THEN [outcome]
+          Include: happy paths, error states, permissions, performance requirements.
+      - id: edge_cases
+        model: gemini
+        prompt: |
+          Identify all edge cases and failure modes for this feature:
+          User story: {{input}}
+          Clarification: {{steps.clarify_story.output}}
+
+          List:
+          - Boundary conditions
+          - Concurrent access scenarios
+          - Partial failure states
+          - Unusual but valid inputs
+          - Security considerations
+      - id: tech_design
+        model: gpt-4
+        prompt: |
+          Propose a technical design for this feature:
+          User story: {{input}}
+          Clarification: {{steps.clarify_story.output}}
+
+          Include:
+          - Proposed API changes (endpoints, schema)
+          - Data model changes
+          - UI/UX considerations
+          - Dependencies and risks
+          - Estimated effort (S/M/L/XL)
+    aggregate:
+      mode: raw
+
+  - id: final_spec
+    name: Compile Feature Spec Document
+    model: claude
+    prompt: |
+      Compile a complete feature spec document:
+      {{steps.parallel_spec.output}}
+
+      Output as a Product Requirements Document (PRD):
+      # Feature: [Name]
+      ## Overview
+      ## User Stories
+      ## Functional Requirements
+      ## Non-Functional Requirements
+      ## Edge Cases
+      ## Technical Design (summary)
+      ## Out of Scope
+      ## Open Questions
+      ## Success Metrics

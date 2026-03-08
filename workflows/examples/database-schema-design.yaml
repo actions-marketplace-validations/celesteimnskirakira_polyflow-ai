@@ -1,0 +1,83 @@
+name: database-schema-design
+description: "Design and review a database schema: ERD, indexes, migrations, validation"
+version: "1.0"
+tags: [database, schema, migration, sql, design]
+
+steps:
+  - id: requirements_analysis
+    name: Analyze Data Requirements
+    model: claude
+    prompt: |
+      Analyze these data requirements and identify the domain model:
+      {{input}}
+
+      Extract:
+      - Core entities and their attributes
+      - Relationships between entities (1:1, 1:N, N:M)
+      - Cardinality and optionality
+      - Key business invariants/constraints
+      - Query patterns that will drive the schema
+      - Scale expectations (rows per day, total data volume)
+
+  - id: parallel_design
+    name: Multi-Model Schema Design
+    type: parallel
+    steps:
+      - id: schema_ddl
+        model: claude
+        prompt: |
+          Design the SQL schema (PostgreSQL) based on these requirements:
+          Analysis: {{steps.requirements_analysis.output}}
+          Requirements: {{input}}
+
+          Generate:
+          - CREATE TABLE statements with proper types, constraints, foreign keys
+          - Indexes for anticipated query patterns
+          - Comments explaining non-obvious design decisions
+          - Follow 3NF normalization (or justify denormalization)
+      - id: migration_plan
+        model: gemini
+        prompt: |
+          Design a safe migration strategy for this schema:
+          Schema: {{steps.requirements_analysis.output}}
+
+          Provide:
+          - Zero-downtime migration approach
+          - Up migration SQL
+          - Down (rollback) migration SQL
+          - Data backfill strategy if applicable
+          - Estimated migration duration
+      - id: review
+        model: gpt-4
+        prompt: |
+          Review this proposed schema design for issues:
+          Requirements: {{input}}
+          Design analysis: {{steps.requirements_analysis.output}}
+
+          Check for:
+          - Missing indexes on foreign keys
+          - N+1 query risks
+          - Over-normalization or under-normalization
+          - Data type choices (use UUID vs bigserial, etc.)
+          - Missing audit columns (created_at, updated_at)
+          - Potential scaling bottlenecks
+    aggregate:
+      mode: diff
+    hitl:
+      message: "Schema design complete. Approve or iterate?"
+      options: [continue, revise, abort]
+      show: diff
+
+  - id: finalize_schema
+    name: Finalize Schema
+    model: claude
+    prompt: |
+      Finalize the database schema incorporating the review feedback:
+      Design: {{steps.parallel_design.output}}
+      Reviewer notes: {{hitl.parallel_design.note}}
+
+      Output:
+      1. Final DDL (clean, commented)
+      2. Final migration files (up + down)
+      3. README explaining schema decisions
+    condition: "{{hitl.parallel_design.choice}} != 'abort'"

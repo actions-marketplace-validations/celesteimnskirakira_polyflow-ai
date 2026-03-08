@@ -1,0 +1,89 @@
+name: adr-generator
+description: "Generate Architecture Decision Records: explore options, evaluate tradeoffs, draft ADR"
+version: "1.0"
+tags: [architecture, adr, decision, design, documentation]
+
+steps:
+  - id: define_problem
+    name: Define Architecture Problem
+    model: claude
+    prompt: |
+      Define the architecture decision context from this description:
+      {{input}}
+
+      Output:
+      - Problem statement (1 paragraph)
+      - Drivers: what forces are shaping this decision?
+      - Constraints: what cannot change?
+      - Quality attributes at stake (performance, scalability, security, maintainability...)
+      - Decision scope (what is and isn't in scope)
+
+  - id: explore_options
+    name: Explore Architecture Options
+    type: parallel
+    steps:
+      - id: options_analysis
+        model: claude
+        prompt: |
+          Generate 3-4 viable architectural options for this decision:
+          Problem: {{steps.define_problem.output}}
+          Context: {{input}}
+
+          For each option:
+          - Name and brief description
+          - How it addresses the problem
+          - Key tradeoffs (pros/cons)
+          - Implementation complexity
+          - Known examples in the industry
+      - id: risk_analysis
+        model: gemini
+        prompt: |
+          Analyze risks and long-term consequences for this architectural decision:
+          Problem: {{steps.define_problem.output}}
+
+          Consider:
+          - What happens if we choose wrong? (reversibility)
+          - Vendor lock-in risks
+          - Scalability ceiling
+          - Team skill requirements
+          - Maintenance burden over 3-5 years
+      - id: industry_patterns
+        model: gpt-4
+        prompt: |
+          Research industry patterns and precedents for this type of decision:
+          Problem: {{steps.define_problem.output}}
+          Context: {{input}}
+
+          Reference:
+          - Common patterns (from Martin Fowler, AWS, Google, etc.)
+          - Anti-patterns to avoid
+          - How similar companies solved this
+          - Relevant RFCs or standards
+    aggregate:
+      mode: diff
+    hitl:
+      message: "Options explored. Select your preferred approach and add notes before drafting ADR?"
+      options: [continue, revise, abort]
+      show: diff
+
+  - id: draft_adr
+    name: Draft Architecture Decision Record
+    model: claude
+    prompt: |
+      Draft a formal Architecture Decision Record (ADR):
+
+      Analysis: {{steps.explore_options.output}}
+      Decision notes: {{hitl.explore_options.note}}
+
+      Use MADR format:
+      # ADR-[N]: [Title]
+
+      ## Status
+      Proposed
+
+      ## Context
+      ## Decision
+      ## Consequences (positive, negative, neutral)
+      ## Alternatives Considered
+      ## References
+    condition: "{{hitl.explore_options.choice}} != 'abort'"

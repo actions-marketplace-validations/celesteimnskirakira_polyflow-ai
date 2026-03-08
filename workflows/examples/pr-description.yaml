@@ -1,0 +1,75 @@
+name: pr-description
+description: "Generate PR title, description, test plan, and risk assessment from git diff"
+version: "1.0"
+tags: [git, pull-request, developer-experience, automation]
+
+steps:
+  - id: analyze_diff
+    name: Analyze Git Diff
+    model: claude
+    prompt: |
+      Analyze this git diff and extract key information:
+      {{input}}
+
+      Output:
+      - Type of change: feat/fix/refactor/docs/chore/perf/test
+      - Files changed (categorized by purpose)
+      - Breaking changes: yes/no (explain if yes)
+      - Affected functionality
+      - Estimated risk level: low/medium/high
+
+  - id: parallel_pr_content
+    name: Generate PR Content
+    type: parallel
+    steps:
+      - id: title_and_summary
+        model: claude
+        prompt: |
+          Write a PR title and summary based on this diff analysis:
+          {{steps.analyze_diff.output}}
+          Diff: {{input}}
+
+          Output:
+          TITLE: <concise title under 72 chars, conventional commit format>
+          SUMMARY: <2-3 sentences explaining what changed and why>
+          MOTIVATION: <why this change was necessary>
+      - id: test_plan
+        model: gemini
+        prompt: |
+          Create a thorough test plan for this PR:
+          Analysis: {{steps.analyze_diff.output}}
+
+          Include:
+          - Automated tests to write/run
+          - Manual testing steps
+          - Edge cases to verify
+          - Environments to test on
+      - id: risk_checklist
+        model: gpt-4
+        prompt: |
+          Generate a deployment risk checklist for this PR:
+          Analysis: {{steps.analyze_diff.output}}
+
+          Include:
+          - Database migrations required?
+          - Config changes needed?
+          - Feature flags to toggle?
+          - Rollback procedure
+          - Monitoring to watch post-deploy
+    aggregate:
+      mode: raw
+
+  - id: compose_pr
+    name: Compose Final PR Description
+    model: claude
+    prompt: |
+      Compose the final PR description from these sections:
+      {{steps.parallel_pr_content.output}}
+
+      Format as GitHub Markdown PR description with sections:
+      ## Summary
+      ## Motivation
+      ## Changes
+      ## Test Plan
+      ## Deployment Checklist
+      ## Screenshots (if applicable)

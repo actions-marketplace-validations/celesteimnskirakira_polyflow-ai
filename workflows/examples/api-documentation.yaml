@@ -1,0 +1,84 @@
+name: api-documentation
+description: "Generate comprehensive API docs: overview, endpoint reference, examples, error catalog"
+version: "1.0"
+tags: [documentation, api, openapi, developer-experience]
+
+steps:
+  - id: analyze_api
+    name: Analyze API Surface
+    model: claude
+    prompt: |
+      Analyze this API code/spec and extract structured information:
+      {{input}}
+
+      Output:
+      - API name and purpose
+      - Authentication mechanism
+      - Base URL pattern
+      - List of endpoints with: method, path, brief description
+      - Data models used
+      - Error response patterns
+
+  - id: parallel_docs
+    name: Generate Documentation Sections
+    type: parallel
+    steps:
+      - id: reference_docs
+        model: claude
+        prompt: |
+          Generate complete endpoint reference documentation for this API:
+          API analysis: {{steps.analyze_api.output}}
+          Full API: {{input}}
+
+          For each endpoint include:
+          - Description
+          - Request parameters (path, query, body) with types and validation
+          - Response schema with examples
+          - Status codes and their meanings
+          Format as clean Markdown.
+      - id: quickstart
+        model: gemini
+        prompt: |
+          Write a developer quickstart guide for this API:
+          API analysis: {{steps.analyze_api.output}}
+
+          Include:
+          - Prerequisites
+          - Authentication setup (with code examples in Python, JS, curl)
+          - First API call walkthrough
+          - Common patterns and recipes
+      - id: error_catalog
+        model: gpt-4
+        prompt: |
+          Create a comprehensive error catalog for this API:
+          API analysis: {{steps.analyze_api.output}}
+          Full API: {{input}}
+
+          For each error: code, message, cause, resolution steps, example response.
+    aggregate:
+      mode: raw
+    hitl:
+      message: "Documentation draft ready. Review before finalizing?"
+      options: [continue, revise, abort]
+      show: summary
+
+  - id: finalize
+    name: Finalize Documentation
+    model: claude
+    prompt: |
+      Combine and polish these documentation sections into a cohesive developer guide:
+
+      Reference docs:
+      {{steps.parallel_docs.output}}
+
+      Editor notes: {{hitl.parallel_docs.note}}
+
+      Output complete Markdown documentation with:
+      - Table of contents
+      - Introduction
+      - Authentication
+      - Quickstart
+      - API Reference
+      - Error Reference
+      - Changelog section placeholder
+    condition: "{{hitl.parallel_docs.choice}} != 'abort'"

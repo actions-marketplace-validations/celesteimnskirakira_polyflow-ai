@@ -1,0 +1,87 @@
+name: changelog-generator
+description: "Generate a polished changelog from git commits: categorize, summarize, format for users"
+version: "1.0"
+tags: [changelog, release, git, documentation, devops]
+
+steps:
+  - id: parse_commits
+    name: Parse and Categorize Commits
+    model: claude
+    prompt: |
+      Parse these git commits and categorize them:
+      {{input}}
+
+      Group commits into categories:
+      - ✨ Features (feat:)
+      - 🐛 Bug Fixes (fix:)
+      - ⚡ Performance (perf:)
+      - 🔒 Security (security:)
+      - 💥 Breaking Changes (BREAKING CHANGE or !)
+      - 📦 Dependencies (deps: / chore(deps):)
+      - 🔧 Maintenance (chore: / refactor:)
+      - 📖 Documentation (docs:)
+
+      Ignore: merge commits, version bumps, automated commits.
+      Output: categorized commit list with commit hash and summary.
+
+  - id: parallel_changelog
+    name: Generate Changelog Versions
+    type: parallel
+    steps:
+      - id: developer_changelog
+        model: claude
+        prompt: |
+          Write a developer-focused technical changelog:
+          Commits: {{steps.parse_commits.output}}
+
+          Include:
+          - All changes with technical details
+          - Breaking changes with migration guide
+          - API changes
+          - Dependency updates
+          Format: CHANGELOG.md (Keep a Changelog standard)
+      - id: user_changelog
+        model: gemini
+        prompt: |
+          Write a user-friendly release notes summary:
+          Commits: {{steps.parse_commits.output}}
+
+          Write for non-technical users:
+          - What's new (features in plain English)
+          - What's fixed (bug fixes users care about)
+          - What changed (breaking changes explained simply)
+          - Skip internal/maintenance changes
+          Format: Blog-style announcement post
+      - id: security_notes
+        model: gpt-4
+        prompt: |
+          Extract security-relevant changes for a security advisory:
+          Commits: {{steps.parse_commits.output}}
+
+          For any security-related changes:
+          - CVE references if applicable
+          - Severity level
+          - Affected versions
+          - Upgrade instructions
+          - Workarounds if available
+          If no security changes, output: "No security changes in this release."
+    aggregate:
+      mode: raw
+    hitl:
+      message: "Changelog generated. Review and select/edit before publishing?"
+      options: [continue, revise, abort]
+      show: raw
+
+  - id: finalize_release
+    name: Finalize Release Notes
+    model: claude
+    prompt: |
+      Combine and finalize the release notes:
+      {{steps.parallel_changelog.output}}
+      Editor notes: {{hitl.parallel_changelog.note}}
+
+      Output:
+      1. CHANGELOG.md entry (for the repository)
+      2. GitHub Release description (markdown)
+      3. Tweet/social media announcement (280 chars)
+    condition: "{{hitl.parallel_changelog.choice}} != 'abort'"

@@ -1,0 +1,86 @@
+name: test-generation
+description: "TDD-style test generation: analyze code, generate unit tests, edge cases, integration tests"
+version: "1.0"
+tags: [testing, tdd, unit-tests, quality]
+
+steps:
+  - id: analyze_code
+    name: Analyze Code Under Test
+    model: claude
+    prompt: |
+      Analyze this code to understand what needs to be tested:
+      {{input}}
+
+      Output:
+      - Public interface (functions/methods/classes)
+      - Dependencies and side effects
+      - Business rules embedded in logic
+      - Identified happy paths
+      - Potential failure modes
+      - Suggested test framework (pytest/jest/mocha/etc.)
+
+  - id: parallel_tests
+    name: Generate Test Suites
+    type: parallel
+    steps:
+      - id: unit_tests
+        model: claude
+        prompt: |
+          Generate comprehensive unit tests for this code:
+          Code: {{input}}
+          Analysis: {{steps.analyze_code.output}}
+
+          Write complete, runnable test code with:
+          - Happy path tests
+          - Boundary condition tests
+          - Type validation tests
+          - Mock setup for dependencies
+          Use pytest style. Include docstrings explaining each test's purpose.
+      - id: edge_cases
+        model: gemini
+        prompt: |
+          Generate adversarial and edge case tests for this code:
+          Code: {{input}}
+          Analysis: {{steps.analyze_code.output}}
+
+          Focus on:
+          - Empty/null inputs
+          - Overflow/underflow values
+          - Concurrent access scenarios
+          - Error propagation paths
+          - Security edge cases (injection, encoding)
+      - id: integration_tests
+        model: gpt-4
+        prompt: |
+          Generate integration test scenarios for this code:
+          Code: {{input}}
+          Analysis: {{steps.analyze_code.output}}
+
+          Write tests that verify:
+          - Interaction with external dependencies
+          - End-to-end data flow
+          - Error handling across boundaries
+          - Performance under load (basic benchmarks)
+    aggregate:
+      mode: raw
+    hitl:
+      message: "Test suite generated. Review and approve before saving?"
+      options: [continue, revise, abort]
+      show: summary
+
+  - id: finalize_tests
+    name: Finalize and Deduplicate Tests
+    model: claude
+    prompt: |
+      Review and finalize these generated tests:
+      {{steps.parallel_tests.output}}
+
+      Reviewer notes: {{hitl.parallel_tests.note}}
+
+      Tasks:
+      1. Remove duplicate tests
+      2. Ensure consistent naming convention
+      3. Add a conftest.py / test fixtures section if needed
+      4. Add coverage summary comment at the top
+      5. Output complete, ready-to-run test file
+    condition: "{{hitl.parallel_tests.choice}} != 'abort'"

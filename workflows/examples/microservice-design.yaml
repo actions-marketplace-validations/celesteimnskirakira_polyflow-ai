@@ -1,0 +1,91 @@
+name: microservice-design
+description: "Decompose a monolith into microservices using DDD: bounded contexts, API contracts, migration plan"
+version: "1.0"
+tags: [microservices, ddd, architecture, decomposition, migration]
+
+steps:
+  - id: domain_analysis
+    name: Domain-Driven Design Analysis
+    model: claude
+    prompt: |
+      Analyze this system/codebase for DDD decomposition:
+      {{input}}
+
+      Apply Domain-Driven Design:
+      - Identify core domains vs supporting domains vs generic domains
+      - Define bounded contexts (areas with their own ubiquitous language)
+      - Map domain relationships: partnership/customer-supplier/conformist/ACL
+      - Identify aggregates and aggregate roots
+      - Find natural seams for service boundaries
+
+  - id: parallel_design
+    name: Design Microservices
+    type: parallel
+    steps:
+      - id: service_decomposition
+        model: claude
+        prompt: |
+          Propose the microservice decomposition:
+          DDD analysis: {{steps.domain_analysis.output}}
+          System: {{input}}
+
+          For each proposed service:
+          - Service name and responsibility
+          - Owned data and database
+          - Public API surface
+          - Team ownership recommendation
+          - Size estimate (LOC, complexity)
+          Validate against: single responsibility, loose coupling, high cohesion.
+      - id: communication_design
+        model: gemini
+        prompt: |
+          Design inter-service communication patterns:
+          Decomposition context: {{steps.domain_analysis.output}}
+
+          For each service interaction specify:
+          - Sync (REST/gRPC) vs Async (event/message queue)
+          - Event schema for domain events
+          - API contract between services
+          - Circuit breaker and retry policies
+          - Saga patterns for distributed transactions
+      - id: migration_roadmap
+        model: gpt-4
+        prompt: |
+          Create a strangler fig migration roadmap:
+          Current system: {{input}}
+          Target decomposition: {{steps.domain_analysis.output}}
+
+          Design:
+          - Migration phases (which services to extract first and why)
+          - Parallel running strategy (monolith + new services)
+          - Data migration approach per service
+          - Feature flags for routing traffic
+          - Rollback triggers
+          - Success metrics per phase
+    aggregate:
+      mode: diff
+    hitl:
+      message: "Microservice design complete. Review decomposition before finalizing?"
+      options: [continue, revise, abort]
+      show: diff
+
+  - id: architecture_doc
+    name: Generate Architecture Document
+    model: claude
+    prompt: |
+      Generate the microservices architecture document:
+      Design: {{steps.parallel_design.output}}
+      Notes: {{hitl.parallel_design.note}}
+
+      Output:
+      # Microservices Architecture: [System Name]
+
+      ## Executive Summary
+      ## Domain Model
+      ## Service Catalog (with responsibilities and owners)
+      ## Communication Patterns
+      ## Data Architecture
+      ## Migration Roadmap
+      ## Risk Register
+      ## Success Metrics
+    condition: "{{hitl.parallel_design.choice}} != 'abort'"

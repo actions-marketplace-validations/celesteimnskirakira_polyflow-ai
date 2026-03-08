@@ -1,0 +1,91 @@
+name: api-spec-design
+description: "Design an OpenAPI spec from requirements: endpoints, schemas, auth, error handling"
+version: "1.0"
+tags: [api, openapi, rest, design, spec-driven]
+
+steps:
+  - id: domain_analysis
+    name: Analyze API Domain
+    model: claude
+    prompt: |
+      Analyze these API requirements and define the domain model:
+      {{input}}
+
+      Output:
+      - API purpose and target consumers (web/mobile/B2B)
+      - Core resources/entities
+      - Key operations per resource (CRUD + custom actions)
+      - Authentication mechanism (JWT/OAuth2/API Key)
+      - Versioning strategy
+      - Rate limiting needs
+      - Idempotency requirements
+
+  - id: parallel_spec
+    name: Design API Spec Sections
+    type: parallel
+    steps:
+      - id: endpoints
+        model: claude
+        prompt: |
+          Design the REST endpoint structure:
+          Domain analysis: {{steps.domain_analysis.output}}
+          Requirements: {{input}}
+
+          For each endpoint specify:
+          - Method + path (RESTful conventions)
+          - Request parameters and body schema
+          - Response schema (success + error)
+          - HTTP status codes
+          - Idempotency behavior
+          Follow RFC 7807 for error responses.
+      - id: schemas
+        model: gemini
+        prompt: |
+          Design the OpenAPI component schemas:
+          Domain analysis: {{steps.domain_analysis.output}}
+
+          For each data model:
+          - Properties with types, formats, constraints
+          - Required vs optional fields
+          - Example values
+          - Relationships to other schemas (using $ref)
+          Output valid OpenAPI 3.1 schema objects.
+      - id: security_design
+        model: gpt-4
+        prompt: |
+          Design the API security scheme:
+          Domain analysis: {{steps.domain_analysis.output}}
+          Requirements: {{input}}
+
+          Specify:
+          - Authentication flow (OAuth2/JWT/API Key)
+          - Authorization model (RBAC/scopes)
+          - Rate limiting strategy
+          - Security headers
+          - CORS policy
+          - Input validation approach
+    aggregate:
+      mode: raw
+    hitl:
+      message: "API spec sections ready. Review before generating full OpenAPI YAML?"
+      options: [continue, revise, abort]
+      show: summary
+
+  - id: generate_openapi
+    name: Generate OpenAPI 3.1 Spec
+    model: claude
+    prompt: |
+      Generate a complete, valid OpenAPI 3.1 YAML specification:
+      Spec sections: {{steps.parallel_spec.output}}
+      Notes: {{hitl.parallel_spec.note}}
+
+      Output complete openapi.yaml with:
+      - openapi: "3.1.0"
+      - info block
+      - servers block
+      - paths (all endpoints)
+      - components (schemas, securitySchemes, responses)
+      - tags for grouping
+
+      Ensure the spec is valid and follows REST best practices.
+    condition: "{{hitl.parallel_spec.choice}} != 'abort'"
