@@ -75,3 +75,26 @@ HITL checkpoints at key decision points."""
     Path(output).write_text(yaml_content)
     click.echo(f"✓ Workflow saved to {output}")
     click.echo(f"\nRun it with: polyflow run {output}")
+
+
+@main.command()
+@click.argument("name")
+@click.option("--output", "-o", default=None, help="Save path (default: <name>.yaml)")
+def pull(name: str, output: str):
+    """Pull a workflow from the community registry."""
+    from polyflow.registry.client import pull_workflow
+    dest = Path(output or f"{name}.yaml")
+    asyncio.run(pull_workflow(name, dest))
+    click.echo(f"✓ Saved to {dest}")
+    click.echo(f"Run: polyflow run {dest}")
+
+
+@main.command()
+def search():
+    """List available workflows in the community registry."""
+    from polyflow.registry.client import list_workflows
+    workflows = asyncio.run(list_workflows())
+    click.echo("Available community workflows:\n")
+    for name in workflows:
+        click.echo(f"  • {name}")
+    click.echo(f"\nInstall with: polyflow pull <name>")
