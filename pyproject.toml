@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "polyflow"
+version = "0.1.0"
+description = "Multi-model AI workflow engine for developers"
+requires-python = ">=3.11"
+dependencies = [
+    "click>=8.1",
+    "pydantic>=2.0",
+    "pyyaml>=6.0",
+    "jinja2>=3.1",
+    "anthropic>=0.40",
+    "google-generativeai>=0.8",
+    "openai>=1.50",
+    "rich>=13.0",
+    "httpx>=0.27",
+]
+
+[project.scripts]
+polyflow = "polyflow.cli:main"
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.24"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
