@@ -1,4 +1,6 @@
+import asyncio
 import click
+from pathlib import Path
 from rich.prompt import Prompt
 from polyflow import __version__
 from polyflow.config import Config, save_config, load_config
@@ -27,3 +29,15 @@ def init():
     cfg = Config(api_keys=keys)
     save_config(cfg)
     click.echo("\n✓ Config saved to ~/.polyflow/config.yaml")
+
+
+@main.command()
+@click.argument("workflow_file", type=click.Path(exists=True, path_type=Path))
+@click.option("--input", "-i", default="", help="Input to pass to the workflow")
+def run(workflow_file: Path, input: str):
+    """Execute a workflow YAML file."""
+    from polyflow.engine.runner import run_workflow
+    if not input:
+        input = click.prompt("Workflow input")
+    config = load_config()
+    asyncio.run(run_workflow(workflow_file, input, config))
