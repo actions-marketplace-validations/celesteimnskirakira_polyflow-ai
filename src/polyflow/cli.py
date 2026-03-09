@@ -461,7 +461,7 @@ def _generate_yaml(description: str, history: list[dict], config) -> str:
         from polyflow.models.openrouter import OPENROUTER_BASE_URL
         client = OpenAI(api_key=config.openrouter_api_key, base_url=OPENROUTER_BASE_URL)
         raw = client.chat.completions.create(
-            model="anthropic/claude-sonnet-4-5",
+            model="anthropic/claude-sonnet-4-6",
             max_tokens=2048,
             messages=[{"role": "system", "content": _NEW_SYSTEM_PROMPT}] + messages,
         ).choices[0].message.content
@@ -533,9 +533,18 @@ def _interactive_new(
             _show_yaml(yaml_content, wf.name, step_ids)
             valid = True
         except (ValidationError, Exception) as e:
+            from rich.syntax import Syntax
             console.print(f"\n  [yellow]⚠ Generated YAML has issues:[/yellow] {e}")
             console.print(Syntax(yaml_content, "yaml", theme="monokai", padding=(0, 1)) if yaml_content else "")
             valid = False
+
+        # ── Auto-save if -o was given ─────────────────────────────────────────
+        if save_path and valid and wf:
+            out_path = Path(save_path)
+            out_path.write_text(yaml_content, encoding="utf-8")
+            console.print(f"\n  [green]✓[/green] Saved to [bold]{out_path}[/bold]")
+            console.print(f"  Run: [bold]polyflow run {out_path} -i \"your input\"[/bold]\n")
+            return
 
         # ── Menu ──────────────────────────────────────────────────────────────
         console.print()
@@ -727,7 +736,7 @@ def _generate_onboard_yaml(tool_name: str, docs_content: str, docs_url: str, con
         from polyflow.models.openrouter import OPENROUTER_BASE_URL
         client = OpenAI(api_key=config.openrouter_api_key, base_url=OPENROUTER_BASE_URL)
         raw = client.chat.completions.create(
-            model="anthropic/claude-sonnet-4-5",
+            model="anthropic/claude-sonnet-4-6",
             max_tokens=2048,
             messages=[
                 {"role": "system", "content": _NEW_SYSTEM_PROMPT},
@@ -1220,10 +1229,33 @@ into valid Polyflow YAML workflows.
 Rules:
 - Output ONLY raw YAML. No markdown fences, no explanation.
 - Use models: claude, gemini, gpt-4
-- Include HITL checkpoints at key decision points
 - Use {{input}} for the user's input
 - Use {{steps.step_id.output}} to reference previous step outputs
 - Make prompts detailed and specific
+- HITL checkpoints are OPTIONAL — only add them if the user explicitly asks for \
+human approval or sign-off. Automated workflows should NOT include HITL.
+
+CRITICAL — Multi-model tasks MUST use type: parallel with aggregate:
+When the user asks for multiple models to analyze the same thing \
+(cross-validate, compare, consensus, parallel review), use this structure:
+
+  - id: review
+    type: parallel
+    steps:
+      - id: claude_view
+        model: claude
+        prompt: "..."
+      - id: gemini_view
+        model: gemini
+        prompt: "..."
+    aggregate:
+      mode: vote      # vote=consensus findings | diff=show disagreements | summary=synthesize
+      model: claude   # model that writes the final synthesis (optional)
+      prompt: |
+        Synthesize findings. Mark items all models flagged as HIGH CONFIDENCE.
+        {{aggregated}}
+
+Do NOT use sequential steps for multi-model tasks — that defeats the purpose.
 
 Schema quick reference:
   name: str (required)
@@ -1231,10 +1263,18 @@ Schema quick reference:
   steps:
     - id: str
       name: str
-      model: claude|gemini|gpt-4
-      prompt: str (supports {{...}} templates)
-      type: sequential|parallel
-      hitl: {message: str, options: list, show: diff|summary|raw}
+      model: claude|gemini|gpt-4          # for sequential steps
+      prompt: str                          # supports {{...}} templates
+      type: parallel                       # omit for sequential
+      steps: [...]                         # sub-steps (parallel only)
+      aggregate:                           # parallel only
+        mode: vote|diff|summary|raw
+        model: claude                      # synthesis model (optional)
+        prompt: str                        # synthesis prompt (optional)
+      hitl:                                # OPTIONAL human approval
+        message: str
+        options: [list]
+        show: diff|summary|raw
       condition: "{{hitl.x.choice}} == 'value'"
-      on_error: {retry: int, fallback: abort|continue}
+      on_error: {retry: int, fallback: abort|continue|skip}
 """

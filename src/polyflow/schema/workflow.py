@@ -45,7 +45,11 @@ class SubStep(BaseModel):
 
 class Step(BaseModel):
     id: str
-    name: str
+    name: str = ""  # optional — defaults to id if omitted
+
+    def model_post_init(self, __context) -> None:
+        if not self.name:
+            self.name = self.id
     model: Optional[str] = None
     prompt: Optional[str] = None
     type: Literal["sequential", "parallel"] = "sequential"
