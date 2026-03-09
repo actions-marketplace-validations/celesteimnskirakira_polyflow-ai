@@ -28,6 +28,7 @@ jobs:
   security-audit:
     name: Multi-model security audit
     runs-on: ubuntu-latest
+    environment: ai-audit
     steps:
       - uses: actions/checkout@v4
 
