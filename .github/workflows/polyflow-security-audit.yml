@@ -64,7 +64,7 @@ jobs:
       - name: Run Polyflow security audit
         if: steps.key-check.outputs.skip != 'true'
         id: audit
-        uses: celesteimnskirakira/polyflow@main
+        uses: celesteimnskirakira/polyflow-ai@main
         with:
           workflow: security-audit
           input: ${{ steps.source.outputs.content }}

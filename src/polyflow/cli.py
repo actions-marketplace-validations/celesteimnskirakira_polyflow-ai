@@ -887,7 +887,7 @@ def search():
         console.print(f"\n  Install: [bold]polyflow pull <name>[/bold]\n")
     except Exception as e:
         console.print(f"\n  [red]Registry unavailable:[/red] {e}")
-        console.print("  → https://github.com/celesteimnskirakira/polyflow\n")
+        console.print("  → https://github.com/celesteimnskirakira/polyflow-ai\n")
 
 
 @main.command()

@@ -82,8 +82,8 @@ action.yml            GitHub Action composite action
 - `action.yml` (GitHub Action)
 
 ### P1 — Next features (Issues already filed)
-- `type: loop` — iterative PDCA loops with termination condition ([#1](https://github.com/celesteimnskirakira/polyflow/issues/1))
-- `type: shell` — local command execution for full PDCA automation ([#2](https://github.com/celesteimnskirakira/polyflow/issues/2))
+- `type: loop` — iterative PDCA loops with termination condition ([#1](https://github.com/celesteimnskirakira/polyflow-ai/issues/1))
+- `type: shell` — local command execution for full PDCA automation ([#2](https://github.com/celesteimnskirakira/polyflow-ai/issues/2))
 
 ### P2 — Growth
 - GitHub Marketplace listing (`action.yml` is ready — submit now)
@@ -125,7 +125,7 @@ For high-stakes decisions where you want explicit human authority — not becaus
 ## Promotion Context
 
 - Published on PyPI as `polyflow-ai` (package name `polyflow` was taken)
-- GitHub repo: `celesteimnskirakira/polyflow`
+- GitHub repo: `celesteimnskirakira/polyflow-ai`
 - Target: GitHub stars + resume material
 - Key angle: "First tool to automate Model Musical Chairs in a GitHub Action"
 - HackerNews Show HN is the highest-leverage channel for initial stars

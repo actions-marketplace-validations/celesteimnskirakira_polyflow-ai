@@ -35,7 +35,7 @@ jobs:
 
       - name: Run Polyflow code review
         id: review
-        uses: celesteimnskirakira/polyflow@main
+        uses: celesteimnskirakira/polyflow-ai@main
         with:
           workflow: code-review-multi-model
           input: ${{ steps.diff.outputs.content }}

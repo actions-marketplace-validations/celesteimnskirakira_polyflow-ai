@@ -9,7 +9,7 @@ description = "Parallel multi-model AI workflows — consensus beats any single 
 readme = "README.md"
 license = {text = "MIT"}
 authors = [{name = "Polyflow Contributors"}]
-urls = {Homepage = "https://github.com/celesteimnskirakira/polyflow", Repository = "https://github.com/celesteimnskirakira/polyflow", "Bug Tracker" = "https://github.com/celesteimnskirakira/polyflow/issues"}
+urls = {Homepage = "https://github.com/celesteimnskirakira/polyflow-ai", Repository = "https://github.com/celesteimnskirakira/polyflow-ai", "Bug Tracker" = "https://github.com/celesteimnskirakira/polyflow-ai/issues"}
 keywords = ["ai", "workflow", "llm", "claude", "gemini", "gpt-4", "automation", "yaml"]
 classifiers = [
     "Development Status :: 4 - Beta",

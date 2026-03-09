@@ -22,7 +22,7 @@ polyflow new "multiple models audit my API for security issues, vote on findings
 Add to any repo as a GitHub Action — every PR reviewed automatically:
 
 ```yaml
-- uses: celesteimnskirakira/polyflow@v1
+- uses: celesteimnskirakira/polyflow-ai@v1
   with:
     workflow: code-review-multi-model
     input: ${{ steps.diff.outputs.content }}

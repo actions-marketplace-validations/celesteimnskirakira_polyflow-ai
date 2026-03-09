@@ -27,7 +27,7 @@ A good workflow demonstrates one of:
 
 ## Reporting Bugs
 
-Open an issue at https://github.com/celesteimnskirakira/polyflow/issues
+Open an issue at https://github.com/celesteimnskirakira/polyflow-ai/issues
 
 Include:
 - Polyflow version: `polyflow --version`
