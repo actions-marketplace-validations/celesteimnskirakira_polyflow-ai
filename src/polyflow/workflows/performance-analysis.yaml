@@ -1,0 +1,89 @@
+name: performance-analysis
+description: "Profile and optimize code/query performance: identify hotspots, propose fixes, measure impact"
+version: "1.0"
+tags: [performance, optimization, profiling, scalability]
+
+steps:
+  - id: baseline_analysis
+    name: Establish Performance Baseline
+    model: claude
+    prompt: |
+      Analyze this code/query for performance characteristics:
+      {{input}}
+
+      Output:
+      - Algorithmic complexity (Big O) of key operations
+      - Memory allocation patterns
+      - I/O operations and their blocking nature
+      - Database query patterns (N+1 risks, missing indexes)
+      - External service calls and their latency impact
+      - Performance budget estimate (CPU/memory/latency)
+
+  - id: parallel_optimization
+    name: Multi-Angle Performance Analysis
+    type: parallel
+    steps:
+      - id: cpu_analysis
+        model: claude
+        prompt: |
+          Analyze CPU and compute performance issues:
+          Code: {{input}}
+          Baseline: {{steps.baseline_analysis.output}}
+
+          Identify:
+          - Hot loops and inefficient algorithms
+          - Redundant computations (cache opportunities)
+          - String/object allocation in tight loops
+          - Parallelization opportunities
+          - Specific optimization with before/after examples
+      - id: database_analysis
+        model: gemini
+        prompt: |
+          Analyze database query performance:
+          Code/queries: {{input}}
+          Baseline: {{steps.baseline_analysis.output}}
+
+          Identify:
+          - Missing indexes
+          - N+1 query problems
+          - Unoptimized JOINs
+          - Missing pagination
+          - Query result caching opportunities
+          - Specific SQL rewrites with EXPLAIN ANALYZE estimates
+      - id: architecture_analysis
+        model: gpt-4
+        prompt: |
+          Analyze architectural performance bottlenecks:
+          Code: {{input}}
+          Baseline: {{steps.baseline_analysis.output}}
+
+          Review:
+          - Synchronous bottlenecks that should be async
+          - Missing caching layers (CDN, Redis, in-memory)
+          - Batch processing opportunities
+          - Connection pool sizing
+          - Horizontal scaling readiness
+    aggregate:
+      mode: diff
+    hitl:
+      message: "Performance analysis complete. Approve optimization plan?"
+      options: [continue, revise, abort]
+      show: diff
+
+  - id: optimization_plan
+    name: Prioritized Optimization Plan
+    model: claude
+    prompt: |
+      Create an actionable optimization plan:
+      Analysis: {{steps.parallel_optimization.output}}
+      Notes: {{hitl.parallel_optimization.note}}
+
+      For each optimization, provide:
+      - Description
+      - Estimated latency/throughput improvement (%)
+      - Implementation effort (hours)
+      - Risk level
+      - How to measure success (benchmark command)
+
+      Sort by: impact/effort ratio (highest first).
+    condition: "{{hitl.parallel_optimization.choice}} != 'abort'"

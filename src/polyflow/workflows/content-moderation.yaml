@@ -1,0 +1,95 @@
+name: content-moderation
+description: "Multi-model content moderation: policy check, context analysis, human escalation for edge cases"
+version: "1.0"
+tags: [moderation, trust-safety, policy, content]
+
+steps:
+  - id: pre_screen
+    name: Initial Content Pre-Screen
+    model: claude
+    prompt: |
+      Pre-screen this content for obvious policy violations:
+      {{input}}
+
+      Perform fast initial assessment:
+      - Content type: text/image-description/code/url
+      - Language/locale detected
+      - Obvious violation categories: spam/hate/violence/adult/misinformation/none
+      - Confidence: high/medium/low
+      - Recommended action: allow/review/block/escalate
+
+      If confidence is HIGH for allow or HIGH for block, flag as fast-track.
+      If confidence is LOW or MEDIUM, flag for parallel deep review.
+
+  - id: parallel_review
+    name: Deep Content Analysis
+    type: parallel
+    steps:
+      - id: policy_check
+        model: claude
+        prompt: |
+          Apply content policy rules to this content:
+          Content: {{input}}
+          Pre-screen: {{steps.pre_screen.output}}
+
+          Check against policy categories:
+          1. Hate speech and discrimination
+          2. Violence and graphic content
+          3. Harassment and bullying
+          4. Misinformation and harmful claims
+          5. Privacy violations
+          6. Illegal content
+
+          For each category: violation level (none/minor/major/severe), evidence, policy reference.
+      - id: context_analysis
+        model: gemini
+        prompt: |
+          Analyze content context and intent:
+          Content: {{input}}
+          Pre-screen: {{steps.pre_screen.output}}
+
+          Consider:
+          - Is this satire, news reporting, or educational content?
+          - Cultural context that may affect interpretation
+          - Community standards (platform context)
+          - Historical vs current events
+          - Counter-speech that discusses harmful content without promoting it
+      - id: harm_assessment
+        model: gpt-4
+        prompt: |
+          Assess potential harm if content is allowed:
+          Content: {{input}}
+          Pre-screen: {{steps.pre_screen.output}}
+
+          Rate harm vectors:
+          - Direct harm to individuals (1-5)
+          - Societal harm (1-5)
+          - Legal/regulatory risk (1-5)
+          - Platform reputation risk (1-5)
+
+          Provide overall harm score and recommended action with confidence.
+    aggregate:
+      mode: vote
+    on_error:
+      partial: continue
+    hitl:
+      message: "AI models disagree or low confidence. Human review required. What is your decision?"
+      options: [allow, remove, escalate]
+      show: diff
+
+  - id: decision_record
+    name: Record Moderation Decision
+    model: claude
+    prompt: |
+      Create a moderation decision record:
+      Content: {{input}}
+      AI analysis: {{steps.parallel_review.output}}
+      Human decision: {{hitl.parallel_review.choice}}
+      Human notes: {{hitl.parallel_review.note}}
+
+      Generate:
+      - Final decision: allow/remove/label/escalate
+      - Policy citations
+      - Decision reasoning (for transparency report)
+      - User notification message (if applicable)
+      - Feedback signal for model improvement

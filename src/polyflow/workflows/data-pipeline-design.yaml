@@ -1,0 +1,85 @@
+name: data-pipeline-design
+description: "Design and review a data pipeline: architecture, transformation logic, validation, monitoring"
+version: "1.0"
+tags: [data, etl, pipeline, data-engineering, analytics]
+
+steps:
+  - id: requirements
+    name: Analyze Pipeline Requirements
+    model: claude
+    prompt: |
+      Analyze these data pipeline requirements:
+      {{input}}
+
+      Extract:
+      - Data sources: types, formats, update frequency, volume
+      - Data destinations: warehouse/lake/API/dashboard
+      - Transformation requirements
+      - Latency requirements: batch/micro-batch/streaming
+      - Data quality requirements
+      - Compliance requirements (PII, GDPR, etc.)
+      - Team tech stack constraints
+
+  - id: parallel_design
+    name: Design Pipeline Components
+    type: parallel
+    steps:
+      - id: architecture
+        model: claude
+        prompt: |
+          Design the pipeline architecture:
+          Requirements: {{steps.requirements.output}}
+          Context: {{input}}
+
+          Propose:
+          - Technology stack (Airflow/Spark/dbt/Kafka/etc.) with justification
+          - Pipeline stages: ingestion, transformation, validation, load
+          - Orchestration approach
+          - Architecture diagram (ASCII or described)
+          - Scalability approach
+      - id: transformation_logic
+        model: gemini
+        prompt: |
+          Design the data transformation logic:
+          Requirements: {{steps.requirements.output}}
+
+          Specify:
+          - Transformation steps in order
+          - Data quality checks at each stage
+          - Deduplication strategy
+          - Handling of nulls, schema changes, late data
+          - dbt models or transformation pseudocode
+      - id: monitoring_alerting
+        model: gpt-4
+        prompt: |
+          Design pipeline monitoring and alerting:
+          Requirements: {{steps.requirements.output}}
+
+          Define:
+          - Key metrics to track (row counts, latency, error rates)
+          - Data freshness SLAs
+          - Anomaly detection rules
+          - Alerting thresholds
+          - Runbook for common failure scenarios
+    aggregate:
+      mode: diff
+    hitl:
+      message: "Pipeline design ready. Review and approve before generating implementation?"
+      options: [continue, revise, abort]
+      show: diff
+
+  - id: implementation_guide
+    name: Generate Implementation Guide
+    model: claude
+    prompt: |
+      Generate an implementation guide for this data pipeline:
+      Design: {{steps.parallel_design.output}}
+      Notes: {{hitl.parallel_design.note}}
+
+      Output:
+      1. Step-by-step setup instructions
+      2. Core transformation code (with comments)
+      3. Testing strategy (unit + integration tests)
+      4. Deployment checklist
+      5. Runbook for operations team
+    condition: "{{hitl.parallel_design.choice}} != 'abort'"

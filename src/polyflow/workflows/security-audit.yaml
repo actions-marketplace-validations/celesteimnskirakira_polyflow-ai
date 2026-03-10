@@ -1,0 +1,83 @@
+name: security-audit
+description: "Multi-stage security audit: OWASP check, dependency scan, secrets detection, fix plan"
+version: "1.0"
+tags: [security, owasp, vulnerability, audit]
+
+steps:
+  - id: threat_model
+    name: Threat Modeling
+    model: claude
+    prompt: |
+      Analyze this codebase/component for security threats:
+      {{input}}
+
+      Apply STRIDE threat model:
+      - Spoofing: authentication and identity risks
+      - Tampering: data integrity risks
+      - Repudiation: logging and audit trail gaps
+      - Information Disclosure: sensitive data exposure
+      - Denial of Service: availability risks
+      - Elevation of Privilege: authorization bypass risks
+
+      Output a prioritized threat list.
+
+  - id: parallel_audit
+    name: Parallel Security Audit
+    type: parallel
+    steps:
+      - id: owasp_check
+        model: claude
+        prompt: |
+          Check this code against OWASP Top 10 vulnerabilities:
+          Code/Component: {{input}}
+          Threat model: {{steps.threat_model.output}}
+
+          For each OWASP category, rate risk: HIGH/MEDIUM/LOW/NONE
+          Provide specific findings with line references where possible.
+      - id: supply_chain
+        model: gemini
+        prompt: |
+          Analyze supply chain and dependency security for:
+          {{input}}
+
+          Check for:
+          - Known CVEs in dependencies
+          - Outdated packages with security patches available
+          - Suspicious or abandoned packages
+          - License compliance issues
+      - id: secrets_scan
+        model: gpt-4
+        prompt: |
+          Scan this code for hardcoded secrets and sensitive data exposure:
+          {{input}}
+
+          Look for:
+          - API keys, tokens, passwords in code
+          - PII or sensitive data in logs
+          - Overly permissive configurations
+          - Debug endpoints left enabled
+    aggregate:
+      mode: diff
+      model: claude
+    on_error:
+      partial: continue
+    hitl:
+      message: "Security audit complete. Review findings before generating remediation plan?"
+      options: [continue, abort]
+      show: diff
+
+  - id: remediation_plan
+    name: Remediation Plan
+    model: claude
+    prompt: |
+      Based on this security audit, generate a prioritized remediation plan:
+      {{steps.parallel_audit.output}}
+
+      Output:
+      - CRITICAL (fix immediately): list of actions
+      - HIGH (fix this sprint): list of actions
+      - MEDIUM (fix next sprint): list of actions
+      - LOW (backlog): list of actions
+
+      For each item: specific fix, effort estimate, verification test.
+    condition: "{{hitl.parallel_audit.choice}} != 'abort'"

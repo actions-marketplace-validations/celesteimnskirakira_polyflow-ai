@@ -1,0 +1,56 @@
+name: cross-validate
+description: "Claude generates a plan, Gemini and GPT-4 validate it in parallel, you confirm"
+version: "1.0"
+tags: [validation, multi-model, planning]
+
+steps:
+  - id: generate
+    name: Generate Plan
+    model: claude
+    prompt: |
+      You are an expert software architect.
+      Create a detailed implementation plan for:
+      {{input}}
+
+      Include: architecture overview, key components, implementation steps, risks.
+    hitl:
+      message: "Plan generated. Continue to cross-validate with Gemini and GPT-4?"
+      options: [continue, abort]
+      show: summary
+
+  - id: validate
+    name: Cross-Validate
+    type: parallel
+    steps:
+      - id: gemini
+        model: gemini
+        prompt: |
+          Review this software implementation plan and identify issues, gaps, or improvements:
+          {{steps.generate.output}}
+      - id: gpt4
+        model: gpt-4
+        prompt: |
+          Review this software implementation plan and identify issues, gaps, or improvements:
+          {{steps.generate.output}}
+    aggregate:
+      mode: diff
+      model: claude
+    hitl:
+      message: "Validation complete. Continue to synthesize final plan?"
+      options: [continue, abort, revise]
+      show: diff
+
+  - id: synthesize
+    name: Synthesize Final Plan
+    model: claude
+    prompt: |
+      Original plan:
+      {{steps.generate.output}}
+
+      Validation feedback:
+      {{steps.validate.output}}
+
+      Revision notes (if any): {{hitl.validate.note}}
+
+      Synthesize an improved final implementation plan incorporating the feedback.
+    condition: "{{hitl.validate.choice}} != 'abort'"

@@ -1,0 +1,98 @@
+name: deploy-checklist
+description: "Pre-deployment validation: risk assessment, checklist generation, go/no-go decision"
+version: "1.0"
+tags: [devops, deployment, ci-cd, reliability, production]
+
+steps:
+  - id: change_analysis
+    name: Analyze Deployment Change
+    model: claude
+    prompt: |
+      Analyze this deployment change:
+      {{input}}
+
+      Extract:
+      - Change type: feature/bugfix/config/infrastructure/rollback
+      - Services being deployed
+      - Database migrations: yes/no (list them)
+      - Config changes: yes/no (list them)
+      - External dependencies changed
+      - Estimated blast radius if this fails
+      - Risk level: low/medium/high/critical
+
+  - id: parallel_validation
+    name: Multi-Dimension Pre-Deploy Validation
+    type: parallel
+    steps:
+      - id: technical_checklist
+        model: claude
+        prompt: |
+          Generate technical deployment checklist:
+          Change: {{steps.change_analysis.output}}
+          Deployment: {{input}}
+
+          Verify:
+          - [ ] All tests passing (unit, integration, e2e)
+          - [ ] Security scan clean
+          - [ ] Performance benchmarks within threshold
+          - [ ] Container images built and scanned
+          - [ ] Secrets/config properly injected
+          - [ ] Database migration tested on staging
+          - [ ] Feature flags configured
+          - [ ] Rollback procedure documented
+      - id: operational_readiness
+        model: gemini
+        prompt: |
+          Assess operational readiness for this deployment:
+          Change: {{steps.change_analysis.output}}
+
+          Check:
+          - Monitoring and alerting configured for new changes?
+          - On-call engineer aware and available?
+          - Runbook updated?
+          - Stakeholders notified (maintenance window)?
+          - Canary/blue-green deployment configured?
+          - Traffic shifting plan defined?
+          - SLO burn rate currently healthy?
+      - id: risk_assessment
+        model: gpt-4
+        prompt: |
+          Perform deployment risk assessment:
+          Change: {{steps.change_analysis.output}}
+          Deployment: {{input}}
+
+          Assess:
+          - Time of day/week risk (peak traffic?)
+          - Recent incident history
+          - Downstream service impact
+          - Customer communication needed?
+          - Legal/compliance considerations
+          - Confidence score: 1-10
+          - Recommended deployment window
+    aggregate:
+      mode: diff
+    hitl:
+      message: "Pre-deployment review complete. Go or No-Go?"
+      options: [continue, abort]
+      show: diff
+
+  - id: deployment_record
+    name: Create Deployment Record
+    model: claude
+    prompt: |
+      Create a deployment record and go-live summary:
+      Validation: {{steps.parallel_validation.output}}
+      Decision: {{hitl.parallel_validation.choice}}
+
+      Output:
+      ## Deployment Record
+
+      **Date:** [today]
+      **Decision:** GO ✅ / NO-GO ❌
+      **Change Summary:**
+      **Validation Results:**
+      **Outstanding Risks:**
+      **Rollback Trigger Conditions:**
+      **Post-Deploy Monitoring Plan:** (what to watch for 30min/1hr/24hr)
+      **Sign-off:** [engineer name]
+    condition: "{{hitl.parallel_validation.choice}} != 'abort'"

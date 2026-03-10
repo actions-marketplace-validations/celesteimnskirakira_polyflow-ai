@@ -1,0 +1,92 @@
+name: incident-postmortem
+description: "AI-driven incident RCA and postmortem: timeline reconstruction, root cause, action items"
+version: "1.0"
+tags: [incident, postmortem, rca, sre, reliability]
+
+steps:
+  - id: timeline
+    name: Reconstruct Incident Timeline
+    model: claude
+    prompt: |
+      Reconstruct a chronological incident timeline from these logs/notes:
+      {{input}}
+
+      Output structured timeline:
+      - Detection time
+      - Key events in chronological order (with timestamps if available)
+      - When was impact first felt by users?
+      - When was incident declared?
+      - Mitigation steps taken and their outcomes
+      - Resolution time
+      - Total duration
+
+  - id: parallel_rca
+    name: Parallel Root Cause Analysis
+    type: parallel
+    steps:
+      - id: technical_rca
+        model: claude
+        prompt: |
+          Perform technical root cause analysis:
+          Timeline: {{steps.timeline.output}}
+          Incident data: {{input}}
+
+          Use the "5 Whys" method. Identify:
+          - Immediate cause (what triggered the incident)
+          - Root cause (the underlying system/process failure)
+          - Contributing factors
+          - Detection gaps (why wasn't this caught earlier?)
+      - id: impact_assessment
+        model: gemini
+        prompt: |
+          Assess the business and customer impact of this incident:
+          Timeline: {{steps.timeline.output}}
+          Incident data: {{input}}
+
+          Quantify:
+          - User impact (how many affected, how severely)
+          - Revenue impact (if applicable)
+          - SLA/SLO breach details
+          - Reputation risk
+          - Compliance implications
+      - id: contributing_factors
+        model: gpt-4
+        prompt: |
+          Identify systemic contributing factors and process failures:
+          Timeline: {{steps.timeline.output}}
+
+          Analyze:
+          - Were there prior warnings/alerts that were missed?
+          - Process gaps that allowed this to reach production
+          - Communication breakdowns during the incident
+          - Tool/monitoring gaps
+    aggregate:
+      mode: diff
+    hitl:
+      message: "RCA analysis complete. Review before generating final postmortem?"
+      options: [continue, revise, abort]
+      show: diff
+
+  - id: postmortem
+    name: Generate Postmortem Document
+    model: claude
+    prompt: |
+      Generate a comprehensive blameless postmortem document:
+
+      RCA findings: {{steps.parallel_rca.output}}
+      Reviewer input: {{hitl.parallel_rca.note}}
+
+      Format:
+      # Incident Postmortem: [Title]
+
+      ## Executive Summary
+      ## Impact
+      ## Timeline
+      ## Root Cause
+      ## Contributing Factors
+      ## Action Items (with owners and due dates)
+      ## Prevention Measures
+      ## Lessons Learned
+
+      Keep tone blameless and constructive.
+    condition: "{{hitl.parallel_rca.choice}} != 'abort'"

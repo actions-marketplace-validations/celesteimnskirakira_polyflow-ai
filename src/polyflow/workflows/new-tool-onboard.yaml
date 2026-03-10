@@ -1,0 +1,30 @@
+name: new-tool-onboard
+description: "Quickly learn and integrate a new AI tool into your workflow"
+version: "1.0"
+tags: [onboarding, learning, integration]
+
+steps:
+  - id: read_docs
+    name: Summarize Tool Documentation
+    model: claude
+    prompt: |
+      Read and summarize this AI tool for a developer:
+      Tool: {{input}}
+
+      Provide:
+      1. What it does in 2 sentences
+      2. Key commands to get started
+      3. How it compares to existing tools
+    hitl:
+      message: "Summary ready. Continue to generate project-specific config?"
+      options: [continue, abort]
+
+  - id: generate_config
+    name: Generate Project-Specific Config
+    model: claude
+    prompt: |
+      Project context: {{context}}
+      Tool summary: {{steps.read_docs.output}}
+
+      Generate a minimal configuration to integrate this tool into the project above.
+      Include: installation command, config file, and first useful command.

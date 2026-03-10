@@ -1,0 +1,95 @@
+name: technical-interview
+description: "Generate a technical interview assessment: questions, rubric, take-home project"
+version: "1.0"
+tags: [hiring, interview, assessment, engineering]
+
+steps:
+  - id: analyze_role
+    name: Analyze Role Requirements
+    model: claude
+    prompt: |
+      Analyze this job description/role requirements:
+      {{input}}
+
+      Extract:
+      - Seniority level (junior/mid/senior/staff)
+      - Required technical skills (ranked by importance)
+      - Domain expertise needed
+      - System design expectations
+      - Cultural/soft skill indicators
+      - Must-have vs nice-to-have skills
+
+  - id: parallel_assessment
+    name: Generate Assessment Components
+    type: parallel
+    steps:
+      - id: technical_questions
+        model: claude
+        prompt: |
+          Generate technical interview questions for this role:
+          Role analysis: {{steps.analyze_role.output}}
+          Job description: {{input}}
+
+          Create 15 questions across categories:
+          - Fundamentals (5): core CS concepts for this role
+          - Practical (5): real-world problem solving
+          - System design (3): architecture and scale
+          - Behavioral-technical (2): past experience with tech challenges
+
+          For each question: difficulty (1-5), expected answer outline, red flags to watch for.
+      - id: coding_challenge
+        model: gemini
+        prompt: |
+          Design a coding challenge for this role:
+          Role analysis: {{steps.analyze_role.output}}
+
+          Create a take-home project that:
+          - Can be completed in 2-4 hours
+          - Tests the most critical skills
+          - Has clear acceptance criteria
+          - Includes evaluation rubric
+          - Has a bonus challenge for seniors
+
+          Output: full project spec with setup instructions.
+      - id: rubric
+        model: gpt-4
+        prompt: |
+          Create a comprehensive evaluation rubric:
+          Role analysis: {{steps.analyze_role.output}}
+          Job description: {{input}}
+
+          Define scoring criteria (1-5) for:
+          - Technical accuracy
+          - Code quality and best practices
+          - Communication clarity
+          - Problem-solving approach
+          - System thinking
+          - Culture fit indicators
+
+          Include: overall scoring guide, hiring bar definition, structured debrief template.
+    aggregate:
+      mode: raw
+    hitl:
+      message: "Interview assessment generated. Review and customize before using?"
+      options: [continue, revise, abort]
+      show: summary
+
+  - id: interview_guide
+    name: Compile Interview Guide
+    model: claude
+    prompt: |
+      Compile a complete interview guide:
+      {{steps.parallel_assessment.output}}
+      Notes: {{hitl.parallel_assessment.note}}
+
+      Output:
+      # Interview Guide: [Role Title]
+
+      ## Interview Process Overview
+      ## Screen Call Questions
+      ## Technical Interview Questions (with rubric)
+      ## System Design Exercise
+      ## Take-Home Project Spec
+      ## Evaluation Rubric
+      ## Debrief Template
+    condition: "{{hitl.parallel_assessment.choice}} != 'abort'"

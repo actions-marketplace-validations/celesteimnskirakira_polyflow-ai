@@ -1,0 +1,83 @@
+name: code-refactoring
+description: "Legacy code refactoring: understand, plan modernization, implement, validate"
+version: "1.0"
+tags: [refactoring, legacy, modernization, code-quality]
+
+steps:
+  - id: understand_code
+    name: Understand Legacy Code
+    model: claude
+    prompt: |
+      Analyze this legacy code and document what it does:
+      {{input}}
+
+      Output:
+      - What this code does (plain English)
+      - Business rules embedded in the logic
+      - Dependencies (external + internal)
+      - Code smells detected (list with severity)
+      - Technical debt categories: duplication, complexity, dead code, coupling
+      - Risk assessment for refactoring: low/medium/high + rationale
+
+  - id: parallel_refactor_plan
+    name: Generate Refactoring Plan
+    type: parallel
+    steps:
+      - id: structural_refactor
+        model: claude
+        prompt: |
+          Plan structural refactoring for this code:
+          Code: {{input}}
+          Analysis: {{steps.understand_code.output}}
+
+          Propose:
+          - Extract method/class opportunities
+          - Dependency injection improvements
+          - Design pattern applications
+          - Naming improvements
+          Show before/after pseudocode for major changes.
+      - id: modernization
+        model: gemini
+        prompt: |
+          Propose language/framework modernization for this code:
+          Code: {{input}}
+          Analysis: {{steps.understand_code.output}}
+
+          Suggest:
+          - Modern language features to use (async/await, generics, etc.)
+          - Library upgrades or replacements
+          - Framework migration path (if applicable)
+          - Performance improvements through modern APIs
+      - id: test_safety_net
+        model: gpt-4
+        prompt: |
+          Define a test safety net before refactoring:
+          Code: {{input}}
+          Analysis: {{steps.understand_code.output}}
+
+          Design:
+          - Characterization tests to lock current behavior
+          - Integration tests for key business rules
+          - Regression test strategy
+          - How to verify refactored code is equivalent
+    aggregate:
+      mode: diff
+    hitl:
+      message: "Refactoring plan ready. Review before generating refactored code?"
+      options: [continue, revise, abort]
+      show: diff
+
+  - id: generate_refactored
+    name: Generate Refactored Code
+    model: claude
+    prompt: |
+      Generate the refactored code based on this plan:
+      Original code: {{input}}
+      Refactoring plan: {{steps.parallel_refactor_plan.output}}
+      Reviewer notes: {{hitl.parallel_refactor_plan.note}}
+
+      Output:
+      1. Refactored code (complete, not pseudocode)
+      2. Migration notes: what changed and why
+      3. Tests to run to verify equivalence
+    condition: "{{hitl.parallel_refactor_plan.choice}} != 'abort'"
