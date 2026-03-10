@@ -57,7 +57,7 @@ def _resolve_workflow(ref: str) -> Path:
         Path.home() / ".polyflow" / "workflows",
     ]
     # Also try relative to the polyflow package's own examples
-    _pkg_examples = Path(__file__).parent.parent.parent.parent / "workflows" / "examples"
+    _pkg_examples = Path(__file__).parent.parent.parent / "workflows" / "examples"
     if _pkg_examples.is_dir():
         search_dirs.append(_pkg_examples)
 
@@ -94,7 +94,7 @@ def _list_local_workflows() -> list[tuple[str, str, str]]:
         Path("workflows"),
         Path.home() / ".polyflow" / "workflows",
     ]
-    _pkg_examples = Path(__file__).parent.parent.parent.parent / "workflows" / "examples"
+    _pkg_examples = Path(__file__).parent.parent.parent / "workflows" / "examples"
     if _pkg_examples.is_dir():
         search_dirs.insert(0, _pkg_examples)
 
